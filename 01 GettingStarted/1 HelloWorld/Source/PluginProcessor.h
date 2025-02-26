@@ -56,11 +56,13 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    void updateFilterParams(float cutOffFrequency, float sampleRate);
 private:
     //==============================================================================
     juce::AudioParameterFloat* gain;
     juce::AudioParameterFloat* delayTimeParam;
     juce::AudioParameterFloat* widthParam;
+    juce::AudioParameterFloat* cutOffParam;
 
     juce::AudioParameterBool* pluckParam;
     float NoiseGain = 0.0f;
@@ -72,6 +74,10 @@ private:
     float delayTime = 0.01f;
     float feedbackGain = 0.99f;
     float noiseWidth = 0.01f;
+    float cutOffFrequency = 1000.0f;
+
+    juce::dsp::IIR::Filter<float> lowPassFilter;
+    juce::dsp::IIR::Coefficients<float> lowPassCoefficients;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HelloWorld1AudioProcessor)
 };
