@@ -58,6 +58,20 @@ public:
 
 private:
     //==============================================================================
-  juce::AudioParameterFloat* gain;
+    juce::AudioParameterFloat* gain;
+    juce::AudioParameterFloat* delayTimeParam;
+    juce::AudioParameterFloat* widthParam;
+
+    juce::AudioParameterBool* pluckParam;
+    float NoiseGain = 0.0f;
+
+    // Circular buffer variables for implementing delay
+    juce::AudioSampleBuffer delayBuffer;
+    int delayBufferLength;
+    int delayReadPosition = 0, delayWritePosition = 0;
+    float delayTime = 0.01f;
+    float feedbackGain = 0.99f;
+    float noiseWidth = 0.01f;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (HelloWorld1AudioProcessor)
 };

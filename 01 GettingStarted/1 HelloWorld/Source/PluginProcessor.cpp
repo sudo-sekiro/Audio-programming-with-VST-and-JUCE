@@ -22,9 +22,11 @@ HelloWorld1AudioProcessor::HelloWorld1AudioProcessor()
                        )
 #endif
 {
-  addParameter(gain = new juce::AudioParameterFloat("gain", "Gain", 0.0f, 1.0f, 0.0f));
-
-}
+  addParameter(gain = new juce::AudioParameterFloat("gain", "Decay", 0.8f, 0.99f, 0.99f));
+  addParameter(delayTimeParam = new juce::AudioParameterFloat("delayTime", "Delay Time",NormalisableRange(0.0f, 0.02f, 0.001f), 0.005f));
+  addParameter(pluckParam = new juce::AudioParameterBool("pluck", "Pluck string", 0));
+  addParameter(widthParam = new juce::AudioParameterFloat("width", "Noise Width", NormalisableRange(0.0f, 0.02f, 0.001f), 0.01f));
+  }
 
 HelloWorld1AudioProcessor::~HelloWorld1AudioProcessor()
 {
@@ -95,8 +97,15 @@ void HelloWorld1AudioProcessor::changeProgramName (int index, const juce::String
 //==============================================================================
 void HelloWorld1AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+  delayBufferLength = (int)(2.0f * sampleRate);
+  if (delayBufferLength < 1) {
+    delayBufferLength = 1;
+  }
+  DBG("delayBufferLength: " + String(delayBufferLength));
+  delayBuffer.setSize(2, delayBufferLength);
+  delayBuffer.clear();
+ // Since delayTime is in seconds, use sample rate to find out what delay position offset should be
+//  delayReadPosition = (int)(delayWritePosition - (delayTime * getSampleRate()) + delayBufferLength) % delayBufferLength;
 }
 
 void HelloWorld1AudioProcessor::releaseResources()
@@ -133,14 +142,47 @@ bool HelloWorld1AudioProcessor::isBusesLayoutSupported (const BusesLayout& layou
 
 void HelloWorld1AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
-    for (int channel = 0; channel < getTotalNumOutputChannels(); ++channel)
-    {
-      auto* channelData = buffer.getWritePointer(channel);
-      for (int sample = 0; sample < buffer.getNumSamples(); sample++)
-      {
-        channelData[sample] = 2.0 * ((double)rand() / (RAND_MAX)) - 1.0;
+  delayReadPosition = (int)(delayWritePosition - (delayTime * getSampleRate()) + delayBufferLength) % delayBufferLength;
+  auto numSamples = buffer.getNumSamples();
+  // DBG(numSamples);
+  delayTime = delayTimeParam->get();
+  noiseWidth = widthParam->get();
+  feedbackGain = gain->get();
+  // DBG("delayTime: " << delayTime);
+  auto pluck = pluckParam->get();
+  if (pluck) {
+    pluckParam->setValueNotifyingHost(0);
+    NoiseGain = 1.0f;
+  }
+  for (int i = 0; i < numSamples; ++i){
+    for (int j = 0; j < 2; ++j) {
+      // DBG("j: " + String(j));
+      float in = 0.f;
+      if (NoiseGain > 0.f) {
+        in = 2.f * NoiseGain * ((double) rand() / RAND_MAX) - static_cast<double>(1.0);
       }
+      // delayData is a circular buffer
+      float* delayData = delayBuffer.getWritePointer(j);
+
+      float out = in + feedbackGain * delayData[delayReadPosition];
+      // DBG("feedback gain: " + String(feedbackGain));
+      delayData[delayWritePosition] = out;
+
+      // Write the input to the delay buffer
+      // float out = delayData[delayReadPosition] + in;
+
+      buffer.getWritePointer(j)[i] = out;
     }
+    if (++delayReadPosition >= delayBufferLength) {
+      delayReadPosition = 0;
+    }
+    if (++delayWritePosition >= delayBufferLength) {
+      delayWritePosition = 0;
+    }
+    if (NoiseGain >= 0.f) {
+      NoiseGain = NoiseGain - 1.f / (noiseWidth * (float) getSampleRate());
+    }
+  }
 }
 
 //==============================================================================
@@ -151,7 +193,7 @@ bool HelloWorld1AudioProcessor::hasEditor() const
 
 juce::AudioProcessorEditor* HelloWorld1AudioProcessor::createEditor()
 {
-    return new HelloWorld1AudioProcessorEditor (*this);
+    return new GenericAudioProcessorEditor (*this);
 }
 
 //==============================================================================
